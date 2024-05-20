@@ -22,7 +22,7 @@ public class Game extends JPanel{
 			AI = new AIPlayer(AITurn);
 		else if(gameMode.equals("AI vs AI")) {
 			AI = new AIPlayer(1);
-			AI2 = new AIPlayer(2);
+			AI2 = new AI2Player(2);
 		}
 		colors.put(1, Color.RED);
 		colors.put(2, Color.YELLOW);
@@ -113,12 +113,14 @@ public class Game extends JPanel{
 	                repaint();
 	                if (endGameIfOver()) {
 	                    ((Timer) e.getSource()).stop(); 
+	                    return;
 	                }
 	            } else {
 	                AI2.move();  
 	                repaint();
 	                if (endGameIfOver()) {
 	                    ((Timer) e.getSource()).stop(); 
+	                    return;
 	                }
 	            }
 	        }
@@ -256,13 +258,13 @@ public class Game extends JPanel{
 			minimaxMove();
 		}
 		
-		private void randMove() {
+		public void randMove() {
 			ArrayList<Integer> validCols = getValidCols();
 			int col = (int)(Math.random()*validCols.size());
 			addDisc(validCols.get(col));
 		}
 		
-		private void minimaxMove() {
+		public void minimaxMove() {
 	        int bestCol = -1;
 	        int bestScore = Integer.MIN_VALUE;
 
@@ -279,8 +281,16 @@ public class Game extends JPanel{
 
 	        addDisc(bestCol);
 		}
-		
-		private int minimax(int depth, boolean maximize, int alpha, int beta) {
+		public ArrayList shuffle(ArrayList<Integer> L) {
+			for(int i=0; i<L.size(); i++) {
+				int temp = L.get(i);
+				int swapIdx = (int)(Math.random()*L.size());
+				L.set(i, L.get(swapIdx));
+				L.set(swapIdx, temp);
+			}
+			return L;
+		}
+		public int minimax(int depth, boolean maximize, int alpha, int beta) {
 			int gameState = checkGameOver();
 			if(gameState != 0) {
 				if(gameState == -1)
@@ -291,9 +301,10 @@ public class Game extends JPanel{
 				return evaluate();
 			}
 			
+			ArrayList<Integer> validCols = shuffle(getValidCols());
 			if(maximize) {
 				int maxScore = Integer.MIN_VALUE;
-				for(int col : getValidCols()) {
+				for(int col : validCols) {
 					addDisc(col);
 					int score = minimax(depth-1, false, alpha, beta);
 					removeDisc(col);
@@ -306,7 +317,7 @@ public class Game extends JPanel{
 			
 			}else {
 				int minScore = Integer.MAX_VALUE;
-				for(int col : getValidCols()) {
+				for(int col : validCols) {
 					addDisc(col);
 					int score = minimax(depth-1, true, alpha, beta);
 					removeDisc(col);
@@ -320,12 +331,12 @@ public class Game extends JPanel{
 			
 		}
 		
-		private int evaluate() {
+		public int evaluate() {
 			int score = streakScore();
 			score += centerColumnScore();
 			return score;
 		}
-		private int centerColumnScore() {
+		public int centerColumnScore() {
 			int score = 0;
 			int centerBonus = 5;
 			for(int r=0; r<N; r++) {
@@ -333,18 +344,18 @@ public class Game extends JPanel{
 			}
 			return score;
 		}
-		private int streakScore() {
+		public int streakScore() {
 			int score = 0;
 			int base = 10;
 			for(int rs=0; rs<N; rs++) {
 				for(int cs=0; cs<M; cs++) {
 					//horiz
-					for(int i=0; i<=3; i++) {
+					for(int i=0; i<3; i++) {
 						if(!inBounds(rs, cs+i) || G[rs][cs+i]!=COLOR)
 							break;
 						score += (int)Math.pow(base, i);
 					}
-					for(int i=0; i<=3; i++) {
+					for(int i=0; i<3; i++) {
 						if(!inBounds(rs, cs+i) || G[rs][cs+i]==COLOR)
 							break;
 						score -= (int)Math.pow(base, i);
@@ -389,6 +400,92 @@ public class Game extends JPanel{
 				}
 			}
 			return score;
+		}
+		
+	}
+	
+	
+	private class AI2Player extends AIPlayer{
+		public AI2Player(int turn) {
+			super(turn);
+		}
+		
+		
+		public int streakScore() {
+			int score = 0;
+			
+			for(int rs=0; rs<N; rs++) {
+				for(int cs=0; cs<M; cs++) {
+					//horiz
+					int good=0, bad=0;
+					for(int i=0; i<3; i++) {
+						if(!inBounds(rs, cs+i))
+							break;
+						if(G[rs][cs+i] == COLOR)
+							good++;
+						else if(G[rs][cs+i] != Color.WHITE)
+							bad++;
+					}
+					score += evalGroup(good, bad);
+					
+					//vert
+					good=0; bad=0;
+					for(int i=0; i<3; i++) {
+						if(!inBounds(rs+i, cs))
+							break;
+						if(G[rs+i][cs] == COLOR)
+							good++;
+						else if(G[rs+i][cs] != Color.WHITE)
+							bad++;
+					}
+					score += evalGroup(good, bad);
+					
+					//pos diag
+					good=0; bad=0;
+					for(int i=0; i<3; i++) {
+						if(!inBounds(rs+i, cs+i))
+							break;
+						if(G[rs+i][cs+i] == COLOR)
+							good++;
+						else if(G[rs+i][cs+i] != Color.WHITE)
+							bad++;
+					}
+					score += evalGroup(good, bad);
+					
+					//pos diag
+					good=0; bad=0;
+					for(int i=0; i<3; i++) {
+						if(!inBounds(rs+i, cs-i))
+							break;
+						if(G[rs+i][cs-i] == COLOR)
+							good++;
+						else if(G[rs+i][cs-i] != Color.WHITE)
+							bad++;
+					}
+					score += evalGroup(good, bad);
+				}
+				
+				
+			}
+			return score;
+		}
+		
+		public int evalGroup(int good, int bad) {
+			int s3=10, s2=5;
+			int so3=9, so2=4;
+			int score = 0;
+			if(bad == 0) {
+				if(good == 3)
+					score += s3;
+				if(good == 2)
+					score += s2;
+			}else if(good == 0){
+				if(bad == 3)
+					score -= so3;
+				if(good == 2)
+					score -= so2;
+			}
+			return 0;
 		}
 		
 	}
