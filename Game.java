@@ -19,9 +19,9 @@ public class Game extends JPanel{
 	
 	public Game(String gameMode, int AITurn) {
 		if(gameMode.equals("Player vs AI"))
-			AI = new AIPlayer(AITurn);
+			AI = new AI2Player(AITurn);
 		else if(gameMode.equals("AI vs AI")) {
-			AI = new AIPlayer(1);
+			AI = new AI2Player(1);
 			AI2 = new AI2Player(2);
 		}
 		colors.put(1, Color.RED);
@@ -63,6 +63,9 @@ public class Game extends JPanel{
 		}
 	}
 	
+	private void animateDiscDrop() {
+		
+	}
 	public void startGame() {
 		if(AI2 != null) {
 			AIVsAI();
@@ -106,10 +109,10 @@ public class Game extends JPanel{
 	}
 	
 	private void AIVsAI() {
-		Timer timer = new Timer(1, new ActionListener() {  
+		Timer timer = new Timer(1000, new ActionListener() {  
 	        public void actionPerformed(ActionEvent e) {
 	            if (turn==1) {
-	                AI.move();  // AI 1 makes a move
+	                AI.move();  
 	                repaint();
 	                if (endGameIfOver()) {
 	                    ((Timer) e.getSource()).stop(); 
@@ -148,6 +151,7 @@ public class Game extends JPanel{
 			JOptionPane.showMessageDialog(null, gameOverStr);
 			
 			removeMouseListener(mouse);
+			return true;
 		}
 		return false;
 	}
@@ -180,13 +184,15 @@ public class Game extends JPanel{
 		return isBoardFull() ? -1 : 0;
 	}
 	private boolean isBoardFull() {
+		return movesStk.size() == N*M;
+		/*
 		for(int r=0; r<N; r++) {
 			for(int c=0; c<M; c++) {
 				if(G[r][c]==null)
 					return false;
 			}
 		}
-		return true;
+		return true;*/
 	}
 	private boolean inBounds(int r, int c) {
 		return r>=0&&r<N && c>=0&&c<M;
@@ -202,7 +208,14 @@ public class Game extends JPanel{
 			}
 		}
 	}
-	
+	private int discCount(int col) {
+		int cnt=0;
+		for(int r=0; r<N; r++) {
+			if(G[r][col] != null)
+				cnt++;
+		}
+		return cnt;
+	}
 	
 	
 	private void takeback() {
@@ -215,7 +228,7 @@ public class Game extends JPanel{
 				return;
 		}
 		for(int i=0; i<takebacks; i++) {
-			int col = movesStk.pop();
+			int col = movesStk.peek();
 			removeDisc(col);		
 		}
 		turn = AI!=null ? 3 - AI.TURN : 3 - turn;
@@ -226,15 +239,17 @@ public class Game extends JPanel{
 			if(G[r][col] != null) {
 				G[r][col] = null;
 				turn = 3 - turn;
-				break;
+				movesStk.pop();
+				return;
 			}
 		}
+
 	}
 	
 	public ArrayList<Integer> getValidCols() {
 		ArrayList<Integer> validCols = new ArrayList<>();
 		for(int c=0; c<M; c++) {
-			for(int r=0; r<N; r++) {
+			for(int r=N-1; r>=0; r--) {
 				if(G[r][c] == null) {
 					validCols.add(c);
 					break;
@@ -254,14 +269,12 @@ public class Game extends JPanel{
 			COLOR = colors.get(turn);
 		}
 		public void move() {
-			//randMove();
+			if(movesStk.size() < 5 || movesStk.size() == 5 && discCount(M/2) == 5) {
+				addDisc(M/2);	
+				return;
+			}
+				
 			minimaxMove();
-		}
-		
-		public void randMove() {
-			ArrayList<Integer> validCols = getValidCols();
-			int col = (int)(Math.random()*validCols.size());
-			addDisc(validCols.get(col));
 		}
 		
 		public void minimaxMove() {
@@ -278,18 +291,9 @@ public class Game extends JPanel{
 	                bestCol = col;
 	            }
 	        }
-
 	        addDisc(bestCol);
 		}
-		public ArrayList shuffle(ArrayList<Integer> L) {
-			for(int i=0; i<L.size(); i++) {
-				int temp = L.get(i);
-				int swapIdx = (int)(Math.random()*L.size());
-				L.set(i, L.get(swapIdx));
-				L.set(swapIdx, temp);
-			}
-			return L;
-		}
+		
 		public int minimax(int depth, boolean maximize, int alpha, int beta) {
 			int gameState = checkGameOver();
 			if(gameState != 0) {
@@ -301,7 +305,8 @@ public class Game extends JPanel{
 				return evaluate();
 			}
 			
-			ArrayList<Integer> validCols = shuffle(getValidCols());
+			ArrayList<Integer> validCols = getValidCols();
+			Collections.sort(validCols, (col1, col2) -> Math.abs(M/2 - col1) - Math.abs(M/2 - col2));
 			if(maximize) {
 				int maxScore = Integer.MIN_VALUE;
 				for(int col : validCols) {
@@ -332,15 +337,23 @@ public class Game extends JPanel{
 		}
 		
 		public int evaluate() {
-			int score = streakScore();
+			int score = 0;
+			score += streakScore();
 			score += centerColumnScore();
 			return score;
 		}
 		public int centerColumnScore() {
 			int score = 0;
-			int centerBonus = 5;
-			for(int r=0; r<N; r++) {
-				score += G[r][M/2] == COLOR ? centerBonus : -centerBonus;
+			int centerBonus = 10;
+			for(int c=0; c<M; c++) {
+				for(int r=0; r<N; r++) {
+					if(G[r][c] != null) {
+						int centerDist = Math.abs(M/2-c);
+						int val = centerDist * centerBonus;
+						score += G[r][c]==COLOR ? val : -val;
+					}
+					
+				}
 			}
 			return score;
 		}
@@ -452,7 +465,7 @@ public class Game extends JPanel{
 					}
 					score += evalGroup(good, bad);
 					
-					//pos diag
+					//neg diag
 					good=0; bad=0;
 					for(int i=0; i<3; i++) {
 						if(!inBounds(rs+i, cs-i))
@@ -482,10 +495,10 @@ public class Game extends JPanel{
 			}else if(good == 0){
 				if(bad == 3)
 					score -= so3;
-				if(good == 2)
+				if(bad == 2)
 					score -= so2;
 			}
-			return 0;
+			return score;
 		}
 		
 	}
